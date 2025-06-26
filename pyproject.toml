@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "content-moderator"
+version = "0.1.0"
+description = ""
+authors = ["RauanKassymkhanov <rauan2001kz@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.13"
+uvicorn = "^0.34.3"
+torch = "^2.7.1"
+transformers = "^4.52.4"
+stanza = "^1.10.1"
+presidio-analyzer = "^2.2.358"
+pandas = "^2.3.0"
+openpyxl = "^3.1.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
