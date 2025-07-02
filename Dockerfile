@@ -12,7 +12,7 @@ COPY pyproject.toml poetry.lock /app/
 
 RUN pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
 
-RUN poetry install
+RUN poetry install --no-root --no-interaction --no-ansi
 
 COPY . /app/
 
