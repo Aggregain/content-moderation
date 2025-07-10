@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Body, HTTPException, Header
 from app.schemas import InputData
+from app.pii import moderate_text # Import the moderate_text function
 
 app = FastAPI()
 
@@ -41,7 +42,10 @@ def handle_moderation(params: dict):
         lang = params["inputs"].get("lang", "ru")
     elif "text" in params and params.get("text"):
         text = params.get("text", "")
-    has_pii, is_toxic = moderate_text(text, lang)
+    
+    # Call the moderate_text function from pii.py
+    has_pii, is_toxic = moderate_text(text, lang) 
+    
     if not has_pii and not is_toxic:
         return {
             "flagged": False,
