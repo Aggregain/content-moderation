@@ -1,6 +1,6 @@
 import re
 from app.deps import nlp_ru, is_valid_snils, region_map, analyzer, tox_model, tox_tokenizer
-import torch
+import torch 
 
 def extract_pii(text: str, lang: str):
     results = []
@@ -65,6 +65,12 @@ def moderate_text(text: str, lang: str):
     has_pii = len(extract_pii(text, lang)) > 0
 
     inputs = tox_tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
+    
+
+    device = tox_model.device 
+
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
     with torch.no_grad():
         outputs = tox_model(**inputs)
         probs = outputs.logits.softmax(dim=1)[0]
