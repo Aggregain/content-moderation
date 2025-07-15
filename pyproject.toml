@@ -15,7 +15,7 @@ stanza = "^1.10.1"
 presidio-analyzer = "^2.2.358"
 pandas = "^2.3.0"
 openpyxl = "^3.1.5"
-kz-iin-validator = "^1.0.2"
+kz-iin-validator = "^0.7.1"
 
 
 [build-system]
