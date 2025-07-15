@@ -1,21 +1,23 @@
-FROM python:3.11-slim
+FROM python:3.9-slim
 
 WORKDIR /app
 
-ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-ENV PIP_DEFAULT_TIMEOUT=600
-ENV PIP_RETRIES=15
+COPY . /app
 
-RUN pip install --upgrade pip && pip install poetry
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml poetry.lock /app/
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="/root/.local/bin:${PATH}"
 
-RUN pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+RUN poetry install --no-root
 
-RUN poetry install --no-root --no-interaction --no-ansi
+RUN poetry run python -m spacy download en_core_web_sm
+RUN poetry run python -m spacy download en_core_web_lg
 
-COPY . /app/
+RUN poetry run python -c "import stanza; stanza.download('ru', verbose=False)"
+
+ENV HF_TOKEN="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"
 
 EXPOSE 8000
 
-CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
