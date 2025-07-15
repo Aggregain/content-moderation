@@ -1,13 +1,16 @@
 import re
-from app.deps import nlp_ru, is_valid_snils, region_map, analyzer, tox_model, tox_tokenizer
+from app.deps import nlp_ru, is_valid_snils, is_valid_iin, region_map, analyzer, tox_model, tox_tokenizer
 import torch
 
 def extract_pii(text: str, lang: str):
     results = []
+    
+    text_lower = text.lower()
+
     if lang == 'ru':
-        for sent in nlp_ru(text).sentences:
+        for sent in nlp_ru(text_lower).sentences:
             for ent in sent.ents:
-                span = text[ent.start_char:ent.end_char]
+                span = text_lower[ent.start_char:ent.end_char]
                 if ent.type in ("LOC", "GPE") and span.upper().startswith(("СНИЛС", "ПАСПОРТ")):
                     continue
                 if ent.type == "PER":
@@ -22,6 +25,7 @@ def extract_pii(text: str, lang: str):
                     "type": et,
                     "text": span
                 })
+
         snils_patterns = [
             re.compile(r"\b\d{3}-\d{3}-\d{3}\s?\d{2}\b"),
             re.compile(r"\b\d{11}\b"),
@@ -35,17 +39,37 @@ def extract_pii(text: str, lang: str):
                         "type": "RUS_SNILS",
                         "text": span
                     })
+
+        iin_pattern = re.compile(r"\b\d{12}\b")
+        for m in iin_pattern.finditer(text):
+            span = m.group()
+            if is_valid_iin(span):
+                results.append({
+                    "type": "KZ_IIN",
+                    "text": span
+                })
+
         phone_rx = re.compile(r"(?:\+7|8)\d{10}")
         for m in phone_rx.finditer(text):
             raw = m.group()
             norm = "+7" + raw[1:] if raw.startswith("8") else raw
             code = norm[2:5]
-            if code not in region_map:
+
+           
+            kz_mobile_prefixes = ["700", "701", "702", "705", "707", "708", "747", "771", "775", "776", "777", "778"]
+            
+            if code in kz_mobile_prefixes:
+                region = "Kazakhstan Mobile"
+            elif code in region_map:
+                region = region_map[code]
+            else:
                 continue
+            
             results.append({
-                "type": f"RUS_PHONE (region: {region_map[code]})",
+                "type": f"PHONE (region: {region})",
                 "text": norm
             })
+
         email_results = analyzer.analyze(text=text, entities=["EMAIL_ADDRESS"], language="en")
         for e in email_results:
             results.append({

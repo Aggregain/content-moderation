@@ -3,7 +3,7 @@ import pandas as pd
 import stanza
 from presidio_analyzer import AnalyzerEngine
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-
+from kz_iin_validator import validate_iin
 
 def is_valid_snils(snils: str) -> bool:
     digits = ''.join(ch for ch in snils if ch.isdigit())
@@ -22,6 +22,12 @@ def is_valid_snils(snils: str) -> bool:
             control = 0
     return control == checksum_value
 
+def is_valid_iin(iin: str) -> bool:
+    try:
+        validate_iin(iin)
+        return True
+    except ValueError:
+        return False
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 

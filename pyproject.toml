@@ -2,7 +2,7 @@
 name = "content-moderator"
 version = "0.1.0"
 description = ""
-authors = ["RauanKassymkhanov <rauan2001kz@gmail.com>"]
+authors = ["RauanKassymkhanov <rauan2001kz@gmail.com>", "Dias Ilyas <dakesi03@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -15,6 +15,7 @@ stanza = "^1.10.1"
 presidio-analyzer = "^2.2.358"
 pandas = "^2.3.0"
 openpyxl = "^3.1.5"
+kz-iin-validator = "^1.0.2"
 
 
 [build-system]
