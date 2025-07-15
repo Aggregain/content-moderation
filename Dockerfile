@@ -16,7 +16,7 @@ RUN poetry run python -m spacy download en_core_web_lg
 
 RUN poetry run python -c "import stanza; stanza.download('ru', verbose=False)"
 
-ENV HF_TOKEN="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"
+ENV HF_TOKEN="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"
 
 EXPOSE 8000
 
