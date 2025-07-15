@@ -4,27 +4,41 @@ import torch
 
 def extract_pii(text: str, lang: str):
     results = []
-    
-    text_lower = text.lower()
+    found_spans = set()
 
     if lang == 'ru':
-        for sent in nlp_ru(text_lower).sentences:
+        doc = nlp_ru(text)
+        for sent in doc.sentences:
             for ent in sent.ents:
-                span = text_lower[ent.start_char:ent.end_char]
+                span = text[ent.start_char:ent.end_char]
+                
                 if ent.type in ("LOC", "GPE") and span.upper().startswith(("СНИЛС", "ПАСПОРТ")):
                     continue
+
+                entity_type = None
                 if ent.type == "PER":
-                    et = "PERSON"
+                    entity_type = "PERSON"
                 elif ent.type == "ORG":
-                    et = "ORG"
+                    entity_type = "ORG"
                 elif ent.type in ("LOC", "GPE"):
-                    et = "GPE"
-                else:
-                    continue
-                results.append({
-                    "type": et,
-                    "text": span
-                })
+                    entity_type = "GPE"
+                
+                if entity_type and span.lower() not in found_spans:
+                    results.append({"type": entity_type, "text": span})
+                    found_spans.add(span.lower())
+
+        name_patterns = [
+            re.compile(r"(?:меня зовут|моё имя|мое имя|зовут меня)\s+([А-Яа-яёЁ]+)", re.IGNORECASE)
+        ]
+        for pattern in name_patterns:
+            for match in pattern.finditer(text):
+                name = match.group(1)
+                if name.lower() not in found_spans:
+                    results.append({
+                        "type": "PERSON",
+                        "text": name
+                    })
+                    found_spans.add(name.lower())
 
         snils_patterns = [
             re.compile(r"\b\d{3}-\d{3}-\d{3}\s?\d{2}\b"),
@@ -35,19 +49,17 @@ def extract_pii(text: str, lang: str):
             for m in rx.finditer(text):
                 span = text[m.start():m.end()]
                 if is_valid_snils(span):
-                    results.append({
-                        "type": "RUS_SNILS",
-                        "text": span
-                    })
-
+                    if span.lower() not in found_spans:
+                        results.append({"type": "RUS_SNILS", "text": span})
+                        found_spans.add(span.lower())
+        
         iin_pattern = re.compile(r"\b\d{12}\b")
         for m in iin_pattern.finditer(text):
             span = m.group()
             if is_valid_iin(span):
-                results.append({
-                    "type": "KZ_IIN",
-                    "text": span
-                })
+                if span.lower() not in found_spans:
+                    results.append({"type": "KZ_IIN", "text": span})
+                    found_spans.add(span.lower())
 
         phone_rx = re.compile(r"(?:\+7|8)\d{10}")
         for m in phone_rx.finditer(text):
@@ -55,7 +67,6 @@ def extract_pii(text: str, lang: str):
             norm = "+7" + raw[1:] if raw.startswith("8") else raw
             code = norm[2:5]
 
-           
             kz_mobile_prefixes = ["700", "701", "702", "705", "707", "708", "747", "771", "775", "776", "777", "778"]
             
             if code in kz_mobile_prefixes:
@@ -65,17 +76,16 @@ def extract_pii(text: str, lang: str):
             else:
                 continue
             
-            results.append({
-                "type": f"PHONE (region: {region})",
-                "text": norm
-            })
+            if norm.lower() not in found_spans:
+                results.append({"type": f"PHONE (region: {region})", "text": norm})
+                found_spans.add(norm.lower())
 
         email_results = analyzer.analyze(text=text, entities=["EMAIL_ADDRESS"], language="en")
         for e in email_results:
-            results.append({
-                "type": "EMAIL_ADDRESS",
-                "text": text[e.start:e.end]
-            })
+            span = text[e.start:e.end]
+            if span.lower() not in found_spans:
+                results.append({"type": "EMAIL_ADDRESS", "text": span})
+                found_spans.add(span.lower())
     else:
         pii = analyzer.analyze(text=text, language='en')
         for e in pii:
