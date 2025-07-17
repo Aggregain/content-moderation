@@ -11,7 +11,7 @@ def extract_pii(text: str, lang: str):
         for sent in doc.sentences:
             for ent in sent.ents:
                 span = text[ent.start_char:ent.end_char]
-                
+
                 if ent.type in ("LOC", "GPE") and span.upper().startswith(("СНИЛС", "ПАСПОРТ")):
                     continue
 
@@ -22,7 +22,7 @@ def extract_pii(text: str, lang: str):
                     entity_type = "ORG"
                 elif ent.type in ("LOC", "GPE"):
                     entity_type = "GPE"
-                
+
                 if entity_type and span.lower() not in found_spans:
                     results.append({"type": entity_type, "text": span})
                     found_spans.add(span.lower())
@@ -52,7 +52,7 @@ def extract_pii(text: str, lang: str):
                     if span.lower() not in found_spans:
                         results.append({"type": "RUS_SNILS", "text": span})
                         found_spans.add(span.lower())
-        
+
         iin_pattern = re.compile(r"\b\d{12}\b")
         for m in iin_pattern.finditer(text):
             span = m.group()
@@ -68,14 +68,14 @@ def extract_pii(text: str, lang: str):
             code = norm[2:5]
 
             kz_mobile_prefixes = ["700", "701", "702", "705", "707", "708", "747", "771", "775", "776", "777", "778"]
-            
+
             if code in kz_mobile_prefixes:
                 region = "Kazakhstan Mobile"
             elif code in region_map:
                 region = region_map[code]
             else:
                 continue
-            
+
             if norm.lower() not in found_spans:
                 results.append({"type": f"PHONE (region: {region})", "text": norm})
                 found_spans.add(norm.lower())
@@ -95,13 +95,41 @@ def extract_pii(text: str, lang: str):
             })
     return results
 
+def normalize_for_toxicity(text: str, lang: str):
+    if lang != 'ru':
+        return text
+
+    doc = nlp_ru(text)
+    if not doc.sentences:
+        return text
+
+    spans_to_lower = []
+    for sent in doc.sentences:
+        for ent in sent.ents:
+            if ent.type in ("ORG", "GPE"):
+                spans_to_lower.append((ent.start_char, ent.end_char))
+
+    normalized = ""
+    last = 0
+    for start, end in sorted(spans_to_lower):
+        normalized += text[last:start] + text[start:end].lower()
+        last = end
+    normalized += text[last:]
+    return normalized
+
+
+
 def moderate_text(text: str, lang: str):
     has_pii = len(extract_pii(text, lang)) > 0
 
-    inputs = tox_tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
+    normalized_text = normalize_for_toxicity(text, lang)
+
+    inputs = tox_tokenizer(normalized_text, return_tensors="pt", truncation=True, max_length=512)
     with torch.no_grad():
         outputs = tox_model(**inputs)
         probs = outputs.logits.softmax(dim=1)[0]
         toxic_score = float(probs[1])
-    is_toxic = toxic_score >= 0.1 
+    is_toxic = toxic_score >= 0.1
+
+    print(f"[DEBUG] Toxic score: {toxic_score:.4f}")
     return has_pii, is_toxic
