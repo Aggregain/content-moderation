@@ -23,9 +23,13 @@ def extract_pii(text: str, lang: str):
                 elif ent.type in ("LOC", "GPE"):
                     entity_type = "GPE"
 
-                if entity_type and span.lower() not in found_spans:
-                    results.append({"type": entity_type, "text": span})
-                    found_spans.add(span.lower())
+                    if entity_type and span.lower() not in found_spans:
+                        # Исключаем капсом-написанные ORG (например, КМГ, СБЕР)
+                        if entity_type == "ORG" and span.isupper():
+                            continue
+                        results.append({"type": entity_type, "text": span})
+                        found_spans.add(span.lower())
+
 
         name_patterns = [
             re.compile(r"(?:меня зовут|моё имя|мое имя|зовут меня)\s+([А-Яа-яёЁ]+)", re.IGNORECASE)
