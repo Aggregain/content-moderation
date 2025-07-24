@@ -44,7 +44,7 @@ def handle_moderation(params: dict):
         text = params.get("text", "")
     
   
-    has_pii, is_toxic = moderate_text(text, lang) 
+    has_pii, is_toxic, _ = moderate_text(text, lang) 
     
     if not has_pii and not is_toxic:
         return {
