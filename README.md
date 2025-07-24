@@ -1,6 +1,6 @@
-🛡️ Content Moderation API
+🛡️ Shai Content Moderation API
 
-A FastAPI service for automated text moderation: detects PII (Russian/English) and toxic content. Plug & play with Dify or any modern platform.
+A FastAPI service for automated text moderation: detects PII (Russian/English) and toxic content. Plug & play with Shai or any modern platform.
 
 🚀 Quick Start
 
@@ -16,7 +16,7 @@ API: http://localhost:8000/api/dify/moderation
 
 🔌 API Usage
 
-POST /api/dify/moderation
+POST /api/shai/moderation
 
 Headers:
 
@@ -50,7 +50,7 @@ Response Example:
 
 ☣️ Toxicity check (TextDetox)
 
-🐳 Docker & Dify ready
+🐳 Docker ready
 
 📝 Notes
 

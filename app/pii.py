@@ -1,102 +1,106 @@
 import re
-from app.deps import nlp_ru, is_valid_snils, is_valid_iin, region_map, analyzer, tox_model, tox_tokenizer
+from app.deps import nlp_ru, is_valid_snils, region_map, analyzer, tox_model, tox_tokenizer
 import torch
 
 def extract_pii(text: str, lang: str):
     results = []
-    found_spans = set()
-
+    
     if lang == 'ru':
+        found_persons = []
+        found_other_pii = []
+        found_spans = set()
+
         doc = nlp_ru(text)
+
+        entities = {}
         for sent in doc.sentences:
             for ent in sent.ents:
                 span = text[ent.start_char:ent.end_char]
+                if ent.type not in entities:
+                    entities[ent.type] = []
                 
                 if ent.type in ("LOC", "GPE") and span.upper().startswith(("СНИЛС", "ПАСПОРТ")):
                     continue
-
-                entity_type = None
-                if ent.type == "PER":
-                    entity_type = "PERSON"
-                elif ent.type == "ORG":
-                    entity_type = "ORG"
-                elif ent.type in ("LOC", "GPE"):
-                    entity_type = "GPE"
                 
-                if entity_type and span.lower() not in found_spans:
-                    results.append({"type": entity_type, "text": span})
+                if span.lower() not in found_spans:
+                    entities[ent.type].append(span)
                     found_spans.add(span.lower())
+        
+        if "PER" in entities:
+            for item in entities["PER"]:
+                found_persons.append({"type": "PERSON", "text": item})
 
-        name_patterns = [
-            re.compile(r"(?:меня зовут|моё имя|мое имя|зовут меня)\s+([А-Яа-яёЁ]+)", re.IGNORECASE)
+  
+        address_keywords = [
+            'улица', 'ул.', 'проспект', 'пр-т', 'площадь', 'пл.', 'дом', 'д.', 
+            'квартира', 'кв.', 'корпус', 'к.', 'строение', 'стр.', 'город', 'г.',
+            'поселок', 'пос.', 'деревня', 'д.'
         ]
-        for pattern in name_patterns:
-            for match in pattern.finditer(text):
-                name = match.group(1)
-                if name.lower() not in found_spans:
-                    results.append({
-                        "type": "PERSON",
-                        "text": name
-                    })
-                    found_spans.add(name.lower())
+        address_pattern = re.compile(r'\b(' + '|'.join(address_keywords) + r')\b', re.IGNORECASE)
+        if address_pattern.search(text):
+            if "LOC" in entities or "GPE" in entities:
+                full_address_parts = entities.get("LOC", []) + entities.get("GPE", [])
+                full_address = ", ".join(part for part in full_address_parts if part not in found_persons)
+                if full_address:
+                    found_other_pii.append({"type": "ADDRESS", "text": full_address})
+        
+        if "GPE" in entities:
+            for item in entities["GPE"]:
+                found_other_pii.append({"type": "BIRTH_PLACE", "text": item})
 
-        snils_patterns = [
-            re.compile(r"\b\d{3}-\d{3}-\d{3}\s?\d{2}\b"),
-            re.compile(r"\b\d{11}\b"),
-            re.compile(r"\b\d{9}\s\d{2}\b")
-        ]
+        snils_patterns = [ re.compile(r"\b\d{3}-\d{3}-\d{3}\s?\d{2}\b"), re.compile(r"\b\d{11}\b") ]
         for rx in snils_patterns:
             for m in rx.finditer(text):
-                span = text[m.start():m.end()]
-                if is_valid_snils(span):
-                    if span.lower() not in found_spans:
-                        results.append({"type": "RUS_SNILS", "text": span})
-                        found_spans.add(span.lower())
-        
-        iin_pattern = re.compile(r"\b\d{12}\b")
-        for m in iin_pattern.finditer(text):
-            span = m.group()
-            if is_valid_iin(span):
-                if span.lower() not in found_spans:
-                    results.append({"type": "KZ_IIN", "text": span})
+                span = m.group()
+                if is_valid_snils(span) and span.lower() not in found_spans:
+                    found_other_pii.append({"type": "RUS_SNILS", "text": span})
                     found_spans.add(span.lower())
 
-        phone_rx = re.compile(r"(?:\+7|8)\d{10}")
+        phone_rx = re.compile(r"(?:\+7|8)\s?\(?\d{3}\)?\s?\d{3}-?\d{2}-?\d{2}")
         for m in phone_rx.finditer(text):
             raw = m.group()
-            norm = "+7" + raw[1:] if raw.startswith("8") else raw
-            code = norm[2:5]
-
-            kz_mobile_prefixes = ["700", "701", "702", "705", "707", "708", "747", "771", "775", "776", "777", "778"]
-            
-            if code in kz_mobile_prefixes:
-                region = "Kazakhstan Mobile"
-            elif code in region_map:
-                region = region_map[code]
-            else:
-                continue
-            
-            if norm.lower() not in found_spans:
-                results.append({"type": f"PHONE (region: {region})", "text": norm})
-                found_spans.add(norm.lower())
+            if raw.lower() not in found_spans:
+                norm = re.sub(r'[^\d]', '', raw)
+                if norm.startswith("8"): norm = "7" + norm[1:]
+                found_other_pii.append({"type": "PHONE", "text": "+" + norm})
+                found_spans.add(raw.lower())
 
         email_results = analyzer.analyze(text=text, entities=["EMAIL_ADDRESS"], language="en")
         for e in email_results:
             span = text[e.start:e.end]
             if span.lower() not in found_spans:
-                results.append({"type": "EMAIL_ADDRESS", "text": span})
+                found_other_pii.append({"type": "EMAIL_ADDRESS", "text": span})
                 found_spans.add(span.lower())
+        
+        passport_pattern = re.compile(r"\b\d{4}\s?\d{6}\b")
+        for m in passport_pattern.finditer(text):
+            span = m.group()
+            if span.lower() not in found_spans:
+                found_other_pii.append({"type": "RUS_PASSPORT", "text": span})
+                found_spans.add(span.lower())
+
+        inn_pattern = re.compile(r"\b\d{12}\b")
+        for m in inn_pattern.finditer(text):
+             span = m.group()
+             if span.lower() not in found_spans: 
+                found_other_pii.append({"type": "RUS_INN", "text": span})
+                found_spans.add(span.lower())
+
+        if found_persons and found_other_pii:
+            results.extend(found_persons)
+            results.extend(found_other_pii)
+            results.append({"type": "PII_COMBO", "text": "Обнаружена комбинация ФИО и других персональных данных"})
+
     else:
         pii = analyzer.analyze(text=text, language='en')
         for e in pii:
-            results.append({
-                "type": e.entity_type,
-                "text": text[e.start:e.end]
-            })
+            results.append({ "type": e.entity_type, "text": text[e.start:e.end] })
+            
     return results
 
 def moderate_text(text: str, lang: str):
-    has_pii = len(extract_pii(text, lang)) > 0
+    pii_results = extract_pii(text, lang)
+    has_pii = len(pii_results) > 0
 
     inputs = tox_tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
     with torch.no_grad():
@@ -104,4 +108,5 @@ def moderate_text(text: str, lang: str):
         probs = outputs.logits.softmax(dim=1)[0]
         toxic_score = float(probs[1])
     is_toxic = toxic_score >= 0.1 
-    return has_pii, is_toxic
+
+    return has_pii, is_toxic, pii_results

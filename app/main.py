@@ -1,16 +1,16 @@
 from fastapi import FastAPI, Body, HTTPException, Header
 from app.schemas import InputData
-from app.pii import moderate_text # Import the moderate_text function
+from app.pii import moderate_text 
 
 app = FastAPI()
 
 
-@app.post("/api/dify/moderation")
+@app.post("/api/shai/moderation")
 async def dify_receive(
         data: InputData = Body(...),
         authorization: str = Header(None)
 ):
-    expected_api_key = "123456"  # <-- Change this!
+    expected_api_key = "123456" 
     if not authorization:
         raise HTTPException(status_code=401, detail="Unauthorized")
     auth_scheme, _, api_key = authorization.partition(' ')
@@ -43,7 +43,7 @@ def handle_moderation(params: dict):
     elif "text" in params and params.get("text"):
         text = params.get("text", "")
     
-    # Call the moderate_text function from pii.py
+  
     has_pii, is_toxic = moderate_text(text, lang) 
     
     if not has_pii and not is_toxic:
