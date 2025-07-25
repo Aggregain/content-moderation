@@ -4,24 +4,6 @@ import stanza
 from presidio_analyzer import AnalyzerEngine
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-def is_valid_snils(snils: str) -> bool:
-    digits = ''.join(ch for ch in snils if ch.isdigit())
-    if len(digits) != 11:
-        return False
-    nums = list(map(int, digits))
-    checksum_value = nums[-2] * 10 + nums[-1]
-    total = sum((i + 1) * nums[i] for i in range(9))
-    if total < 100:
-        control = total
-    elif total in (100, 101):
-        control = 0
-    else:
-        control = total % 101
-        if control == 100:
-            control = 0
-    return control == checksum_value
-
-
 DATA_DIR = Path(__file__).parent.parent / "data"
 
 

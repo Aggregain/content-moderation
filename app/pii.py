@@ -1,7 +1,8 @@
 import re
-from app.deps import nlp_ru, is_valid_snils, analyzer, pii_patterns
+from app.deps import nlp_ru, analyzer, pii_patterns
 from app.deps import tox_model, tox_tokenizer
 import torch
+
 
 def extract_pii(text: str, lang: str):
     final_results = []
@@ -21,6 +22,18 @@ def extract_pii(text: str, lang: str):
         if "PER" in entities:
             found_persons.extend([{"type": "PERSON", "text": item} for item in entities["PER"]])
 
+    
+        address_keywords = ['адрес', 'проживает', 'улица', 'ул.', 'дом', 'квартира', 'кв.', 'проспект']
+        if any(kw in text.lower() for kw in address_keywords):
+       
+            address_parts = entities.get("LOC", []) + entities.get("GPE", [])
+            if address_parts:
+                full_address = ", ".join(address_parts)
+                if full_address.lower() not in found_spans:
+                    found_other_pii.append({"type": "ADDRESS", "text": full_address})
+                    found_spans.add(full_address.lower())
+        
+    
         birth_keywords = ['родился в', 'родилась в', 'родом из', 'в городе']
         for keyword in birth_keywords:
             match = re.search(rf'{re.escape(keyword)}\s+((?:[А-ЯЁ][а-яё]+(?:[-\s]?[А-ЯЁа-яё]+)*))', text, re.IGNORECASE)
@@ -30,6 +43,7 @@ def extract_pii(text: str, lang: str):
                     found_other_pii.append({"type": "BIRTH_PLACE", "text": place_name})
                     found_spans.add(place_name.lower())
         
+  
         for pattern_info in pii_patterns:
             pii_type = pattern_info['entity_type']
             regex = pattern_info['regex']
@@ -39,22 +53,20 @@ def extract_pii(text: str, lang: str):
                 span = m.group()
                 normalized_span = ''.join(filter(str.isdigit, span))
                 if normalized_span not in found_spans:
-                    # ИСПРАВЛЕНИЕ ДЛЯ СНИЛС
                     if pii_type == "RUS_SNILS":
-                        # Мы больше не проверяем is_valid_snils(span)
                         found_snils.append({"type": pii_type, "text": span})
-                        found_spans.add(normalized_span)
-                    elif pii_type in ["RUS_PASSPORT", "RUS_INN", "RUS_PHONE"]:
-                         found_other_pii.append({"type": pii_type, "text": span})
-                         found_spans.add(normalized_span)
+                    else:
+                        found_other_pii.append({"type": pii_type, "text": span})
+                    found_spans.add(normalized_span)
         
+   
         email_results = analyzer.analyze(text=text, entities=["EMAIL_ADDRESS"], language="en")
         for e in email_results:
             span = text[e.start:e.end]
             if span.lower() not in found_spans:
                  found_other_pii.append({"type": "EMAIL_ADDRESS", "text": span})
                  found_spans.add(span.lower())
-        
+      
         if found_snils:
             final_results.extend(found_snils)
             if found_persons:
