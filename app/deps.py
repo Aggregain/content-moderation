@@ -3,6 +3,7 @@ import pandas as pd
 import stanza
 from presidio_analyzer import AnalyzerEngine
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 
@@ -33,6 +34,11 @@ nlp_ru = stanza.Pipeline(lang="ru", processors="tokenize,ner", verbose=False)
 
 analyzer = AnalyzerEngine()
 
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Используемое устройство для модели токсичности: {device}")
+
 tox_model_name = "textdetox/xlmr-large-toxicity-classifier-v2"
-tox_model = AutoModelForSequenceClassification.from_pretrained(tox_model_name)
+
+tox_model = AutoModelForSequenceClassification.from_pretrained(tox_model_name).to(device)
 tox_tokenizer = AutoTokenizer.from_pretrained(tox_model_name)
