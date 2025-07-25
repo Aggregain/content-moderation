@@ -1,6 +1,7 @@
 import re
 from app.deps import nlp_ru, is_valid_snils, analyzer, pii_patterns
 from app.deps import tox_model, tox_tokenizer
+import torch
 
 def extract_pii(text: str, lang: str):
     final_results = []
