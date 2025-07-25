@@ -1,5 +1,5 @@
 import re
-from app.deps import nlp_ru, is_valid_snils, analyzer, pii_patterns # Предполагаем, что pii_patterns загружаются здесь
+from app.deps import nlp_ru, is_valid_snils, analyzer, pii_patterns
 from app.deps import tox_model, tox_tokenizer
 
 def extract_pii(text: str, lang: str):
@@ -22,42 +22,38 @@ def extract_pii(text: str, lang: str):
 
         birth_keywords = ['родился в', 'родилась в', 'родом из', 'в городе']
         for keyword in birth_keywords:
-            match = re.search(rf'{re.escape(keyword)}\s+([А-ЯЁ][а-яё]+)', text, re.IGNORECASE)
+            match = re.search(rf'{re.escape(keyword)}\s+((?:[А-ЯЁ][а-яё]+(?:[-\s]?[А-ЯЁа-яё]+)*))', text, re.IGNORECASE)
             if match:
-                city = match.group(1)
-                if city.lower() not in found_spans:
-                    found_other_pii.append({"type": "BIRTH_PLACE", "text": city})
-                    found_spans.add(city.lower())
-
-    
+                place_name = match.group(1)
+                if place_name.lower() not in found_spans:
+                    found_other_pii.append({"type": "BIRTH_PLACE", "text": place_name})
+                    found_spans.add(place_name.lower())
+        
         for pattern_info in pii_patterns:
             pii_type = pattern_info['entity_type']
             regex = pattern_info['regex']
-            
-         
             rx = re.compile(regex)
             
             for m in rx.finditer(text):
                 span = m.group()
                 normalized_span = ''.join(filter(str.isdigit, span))
                 if normalized_span not in found_spans:
-           
+                    # ИСПРАВЛЕНИЕ ДЛЯ СНИЛС
                     if pii_type == "RUS_SNILS":
-                        if is_valid_snils(span):
-                            found_snils.append({"type": pii_type, "text": span})
-                            found_spans.add(normalized_span)
-          
+                        # Мы больше не проверяем is_valid_snils(span)
+                        found_snils.append({"type": pii_type, "text": span})
+                        found_spans.add(normalized_span)
                     elif pii_type in ["RUS_PASSPORT", "RUS_INN", "RUS_PHONE"]:
                          found_other_pii.append({"type": pii_type, "text": span})
                          found_spans.add(normalized_span)
         
         email_results = analyzer.analyze(text=text, entities=["EMAIL_ADDRESS"], language="en")
         for e in email_results:
-            if e.entity_text.lower() not in found_spans:
-                 found_other_pii.append({"type": "EMAIL_ADDRESS", "text": e.entity_text})
-                 found_spans.add(e.entity_text.lower())
+            span = text[e.start:e.end]
+            if span.lower() not in found_spans:
+                 found_other_pii.append({"type": "EMAIL_ADDRESS", "text": span})
+                 found_spans.add(span.lower())
         
-     
         if found_snils:
             final_results.extend(found_snils)
             if found_persons:
@@ -78,7 +74,9 @@ def moderate_text(text: str, lang: str):
     is_toxic = False
     if text:
         inputs = tox_tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-        probs = tox_model(**inputs).logits.softmax(dim=1)[0]
-        toxic_score = float(probs[1])
-        is_toxic = toxic_score >= 0.1
+        with torch.no_grad():
+            outputs = tox_model(**inputs)
+            probs = outputs.logits.softmax(dim=1)[0]
+            toxic_score = float(probs[1])
+            is_toxic = toxic_score >= 0.1
     return has_pii, is_toxic, pii_results
