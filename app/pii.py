@@ -1,5 +1,5 @@
 import re
-from app.deps import nlp_ru, analyzer, pii_patterns
+from app.deps import nlp_ru, analyzer, pii_patterns, device 
 from app.deps import tox_model, tox_tokenizer
 import torch
 
@@ -86,10 +86,12 @@ def moderate_text(text: str, lang: str):
     has_pii = len(pii_results) > 0
     is_toxic = False
     if text:
-        inputs = tox_tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
+        inputs = tox_tokenizer(text, return_tensors="pt", truncation=True, max_length=512).to(device)
+        
         with torch.no_grad():
             outputs = tox_model(**inputs)
             probs = outputs.logits.softmax(dim=1)[0]
             toxic_score = float(probs[1])
-            is_toxic = toxic_score >= 0.2
+            is_toxic = toxic_score >= 0.1
+            
     return has_pii, is_toxic, pii_results
