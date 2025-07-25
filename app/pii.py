@@ -91,5 +91,5 @@ def moderate_text(text: str, lang: str):
             outputs = tox_model(**inputs)
             probs = outputs.logits.softmax(dim=1)[0]
             toxic_score = float(probs[1])
-            is_toxic = toxic_score >= 0.1
+            is_toxic = toxic_score >= 0.2
     return has_pii, is_toxic, pii_results
